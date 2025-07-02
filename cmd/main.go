@@ -41,7 +41,7 @@ func main() {
 	go cache.Run(stopCh)
 
 	scaler := scaler.NewIngressNginxScaler(clientset, cache)
-	klog.Info("Starting scaler server")
+	klog.V(2).Info("Starting scaler server")
 	if err := server.Start(scaler); err != nil {
 		log.Fatal(err)
 	}

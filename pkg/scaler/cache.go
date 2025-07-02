@@ -67,7 +67,7 @@ func (c *MetricsAddrCache) Run(stopCh <-chan struct{}) {
 		},
 	})
 
-	klog.Info("Starting pod informer in cache")
+	klog.V(2).Info("Starting pod informer in cache")
 	c.podInformer.Run(stopCh)
 }
 
@@ -84,7 +84,7 @@ func (c *MetricsAddrCache) AddPod(pod *corev1.Pod) {
 		return
 	}
 
-	klog.Infof("Adding pod %s/%s with identity %s and address %s", pod.Namespace, pod.Name, identity, addr)
+	klog.V(4).Infof("Adding pod %s/%s with identity %s and address %s", pod.Namespace, pod.Name, identity, addr)
 	c.cache[identity] = addr
 
 	c.triggerWatch(identity)
@@ -97,7 +97,7 @@ func (c *MetricsAddrCache) RemovePod(pod *corev1.Pod) {
 		return
 	}
 
-	klog.Infof("Removing pod %s/%s from cache", pod.Namespace, pod.Name)
+	klog.V(4).Infof("Removing pod %s/%s from cache", pod.Namespace, pod.Name)
 	delete(c.cache, identity)
 
 	c.triggerWatch(identity)

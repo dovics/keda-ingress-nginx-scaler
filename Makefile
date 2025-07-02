@@ -18,4 +18,4 @@ redeploy: docker
 	kubectl delete pod -n keda -l app=ingress-nginx-external-scaler
 
 log:
-	kubectl logs -n keda -l app=ingress-nginx-external-scaler
+	kubectl logs -n keda -l app=ingress-nginx-external-scaler --tail=2000

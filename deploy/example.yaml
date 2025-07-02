@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: test-1
 spec:
-  replicas: 0
+  replicas: 2
   selector:
     matchLabels:
       app: test-1
@@ -62,4 +62,5 @@ spec:
       metadata:
         scalerAddress: ingress-nginx-external-scaler.keda:9443
         ingressName: test-1
+        period: "30s"
         qps: "10"

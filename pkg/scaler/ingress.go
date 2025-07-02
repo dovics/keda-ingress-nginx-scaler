@@ -49,7 +49,7 @@ func GetIngressClass(pod *corev1.Pod) string {
 		}
 	}
 
-	klog.Infof("Ingress controller pod %s does not have an ingress-class argument, use empty as default", pod.Name)
+	klog.V(4).Infof("Ingress controller pod %s does not have an ingress-class argument, use empty as default", pod.Name)
 	return ""
 }
 
@@ -74,6 +74,6 @@ func GetHealthzPortForIngressController(pod *corev1.Pod) int {
 		}
 	}
 
-	klog.Infof("Using default healthz port: %d", DefaultHealthzPort)
+	klog.V(4).Infof("Using default healthz port: %d", DefaultHealthzPort)
 	return DefaultHealthzPort
 }

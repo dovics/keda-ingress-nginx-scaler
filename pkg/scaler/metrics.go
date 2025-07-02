@@ -24,7 +24,7 @@ type CounterCache struct {
 	parser expfmt.TextParser
 
 	cacheSize int
-	cache     map[string]*utils.Ring[*model.Sample]
+	cache     map[string]*utils.Ring[float64]
 	mu        sync.RWMutex
 
 	indexFunc func(model.Metric) string
@@ -46,7 +46,7 @@ func NewCounterCache(name string, internal time.Duration, period time.Duration, 
 
 		cacheSize: cacheSize,
 
-		cache: make(map[string]*utils.Ring[*model.Sample]),
+		cache: make(map[string]*utils.Ring[float64]),
 	}
 }
 
@@ -55,11 +55,12 @@ func (c *CounterCache) SetIndexFunc(f func(model.Metric) string) {
 }
 
 func (c *CounterCache) Run() {
-	ticker := time.NewTicker(c.period)
-	klog.Infof("Starting counter cache for %s with period %s", c.name, c.period)
+	ticker := time.NewTicker(c.internal)
+	klog.V(4).Infof("Starting counter cache for %s with period %s", c.name, c.internal)
 	for {
 		select {
 		case <-ticker.C:
+			totalData := make(map[string]float64)
 			for _, addr := range c.addrs {
 				klog.V(6).Infof("Fetching metrics from %s", addr)
 				data, err := c.FetchMetrics(addr)
@@ -67,18 +68,25 @@ func (c *CounterCache) Run() {
 					continue
 				}
 
-				c.mu.Lock()
-				for name, samples := range data {
-					r, ok := c.cache[name]
-					if !ok {
-						r = utils.NewRing[*model.Sample](int(c.period / c.internal))
-						c.cache[name] = r
-					}
-
-					r.Enqueue(samples)
+				for name, sample := range data {
+					totalData[name] += sample
 				}
-				c.mu.Unlock()
 			}
+
+			c.mu.Lock()
+			for name, samples := range totalData {
+				r, ok := c.cache[name]
+				if !ok {
+					klog.V(4).Infof("Creating new ring buffer %s", name)
+					r = utils.NewRing[float64](int(c.period / c.internal))
+					c.cache[name] = r
+				}
+
+				klog.V(8).Infof("Adding %f to ring buffer %s", samples, name)
+				r.Enqueue(samples)
+			}
+			c.mu.Unlock()
+
 		case addrs, ok := <-c.addrCh:
 			if !ok {
 				klog.Warning("CounterCache channel closed")
@@ -90,7 +98,7 @@ func (c *CounterCache) Run() {
 	}
 }
 
-func (c *CounterCache) FetchMetrics(url string) (map[string]*model.Sample, error) {
+func (c *CounterCache) FetchMetrics(url string) (map[string]float64, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		klog.Errorf("Failed to fetch metrics from %s: %v", url, err)
@@ -104,7 +112,7 @@ func (c *CounterCache) FetchMetrics(url string) (map[string]*model.Sample, error
 		return nil, err
 	}
 
-	samples := make(map[string]*model.Sample)
+	samples := make(map[string]float64)
 	for name, mf := range metricFamilies {
 		if name != c.name {
 			continue
@@ -136,31 +144,28 @@ func (c *CounterCache) FetchMetrics(url string) (map[string]*model.Sample, error
 				index = labels.String()
 			}
 
-			samples[index] = &model.Sample{
-				Metric:    labels,
-				Value:     model.SampleValue(value),
-				Timestamp: model.TimeFromUnixNano(m.GetTimestampMs() * 1000000),
-			}
+			samples[index] = value
 		}
 	}
 
 	return samples, nil
 }
 
-func (c *CounterCache) GetLatest(index string) (*model.Sample, error) {
-	if c.cache[index] == nil {
-		return nil, fmt.Errorf("index %s not found", index)
+func (c *CounterCache) GetLatest(index string) (float64, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	cache, ok := c.cache[index]
+	if !ok {
+		return 0, fmt.Errorf("index %s not found", index)
 	}
-	return c.cache[index].GetLatest(), nil
+
+	return cache.GetLatest(), nil
 }
 
-func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (*model.Sample, error) {
+func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (float64, error) {
 	if beforeTime > c.period {
-		return nil, fmt.Errorf("beforeTime %s is greater than period %s", beforeTime, c.period)
-	}
-
-	if c.cache[index] == nil {
-		return nil, fmt.Errorf("index %s not found", index)
+		return 0, fmt.Errorf("beforeTime %s is greater than period %s", beforeTime, c.period)
 	}
 
 	before := beforeTime / c.internal
@@ -169,21 +174,29 @@ func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (*model
 	}
 
 	c.mu.RLock()
-	result := c.cache[index].GetBefore(int(before))
-	c.mu.RUnlock()
+	defer c.mu.RUnlock()
 
-	return result, nil
+	cache, ok := c.cache[index]
+	if !ok {
+		return 0, fmt.Errorf("index %s not found", index)
+	}
+
+	return cache.GetBefore(int(before)), nil
 }
 
 func (c *CounterCache) IsActive(index string, beforeTime time.Duration) bool {
-	// TODO: use beforeTime to check if the cache is active
-	if c.cache[index] == nil {
-		return false
+	before := beforeTime / c.internal
+	if before%c.internal != 0 {
+		klog.Warningf("beforeTime %s is not a multiple of internal %s", beforeTime, c.internal)
 	}
 
 	c.mu.RLock()
-	result := c.cache[index].IsFill()
-	c.mu.RUnlock()
+	defer c.mu.RUnlock()
 
-	return result
+	cache, ok := c.cache[index]
+	if !ok {
+		return false
+	}
+
+	return cache.Count() > int(before)
 }

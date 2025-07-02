@@ -32,7 +32,7 @@ func (s *Server) Start(srv pb.ExternalScalerServer) error {
 	}
 	pb.RegisterExternalScalerServer(s.server, srv)
 
-	klog.Infof("listenting on %d", s.port)
+	klog.V(2).Infof("listenting on %d", s.port)
 	if err := s.server.Serve(lis); err != nil {
 		log.Fatal(err)
 	}

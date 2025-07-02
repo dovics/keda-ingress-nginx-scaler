@@ -1,10 +1,10 @@
 package utils
 
 type Ring[T any] struct {
-	data   []T
-	index  int
-	size   int
-	isFill bool
+	data  []T
+	index int
+	size  int
+	count int
 }
 
 func NewRing[T any](size int) *Ring[T] {
@@ -16,17 +16,14 @@ func NewRing[T any](size int) *Ring[T] {
 
 func (r *Ring[T]) Enqueue(item T) {
 	r.data[r.index] = item
-	if r.index == r.size-1 {
-		r.isFill = true
-	}
+	r.count++
 
 	r.index = (r.index + 1) % len(r.data)
 }
 
-func (r *Ring[T]) IsFill() bool {
-	return r.isFill
+func (r *Ring[T]) Count() int {
+	return r.count
 }
-
 func (r *Ring[T]) Get(index int) T {
 	return r.data[index]
 }

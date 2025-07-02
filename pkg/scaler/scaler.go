@@ -115,7 +115,7 @@ func (s *IngressNginxScaler) StreamIsActive(scaledObject *pb.ScaledObjectRef, ep
 		case <-epsServer.Context().Done():
 			// call cancelled
 			return nil
-		case <-time.Tick(time.Hour * 1):
+		case <-time.Tick(time.Minute):
 			globString, err := s.parseGlobFromScaledObject(epsServer.Context(), scaledObject)
 			if err != nil {
 				return status.Error(codes.Internal, err.Error())
@@ -173,14 +173,26 @@ func (s *IngressNginxScaler) GetMetrics(ctx context.Context, metricRequest *pb.G
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	periodString := scaledObject.ScalerMetadata["ingressName"]
-	period, _ := time.ParseDuration(periodString)
+	periodString := scaledObject.ScalerMetadata["period"]
+	period, err := time.ParseDuration(periodString)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	cache := s.getMetricsCache(globString)
 
-	latest, _ := cache.GetLatest(ingressName)
-	before, _ := cache.GetBefore(ingressName, 10*time.Second)
+	latest, err := cache.GetLatest(ingressName)
+	if err != nil {
+		klog.Errorf("scalerobject %s/%s get latest metrics cache err: %v", scaledObject.Namespace, scaledObject.Name, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 
-	qps := float64(latest.Value-before.Value) / period.Seconds()
+	before, err := cache.GetBefore(ingressName, period)
+	if err != nil {
+		klog.Errorf("scalerobject %s/%s get before metrics cache err: %v", scaledObject.Namespace, scaledObject.Name, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	qps := (latest - before) / period.Seconds()
 	return &pb.GetMetricsResponse{
 		MetricValues: []*pb.MetricValue{{
 			MetricName:       "ingress-nginx-qps",
