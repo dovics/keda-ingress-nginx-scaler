@@ -1,0 +1,1 @@
+# keda-ingress-nginx-scaler

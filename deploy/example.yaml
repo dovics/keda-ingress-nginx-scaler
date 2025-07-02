@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-1
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: test-1
+  template:
+    metadata:
+      labels:
+        app: test-1
+    spec:
+      containers:
+      - name: http
+        image: nginx:latest
+        imagePullPolicy: IfNotPresent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-1
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: test-1
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-1
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: test-1.local
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: test-1
+              port:
+                number: 80
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: test-1
+spec:
+  scaleTargetRef:
+    name: test-1
+  pollingInterval: 20
+  maxReplicaCount: 10
+  minReplicaCount: 2
+  triggers:
+    - type: external
+      metadata:
+        scalerAddress: ingress-nginx-external-scaler.keda:9443
+        ingressName: test-1
+        qps: "10"
