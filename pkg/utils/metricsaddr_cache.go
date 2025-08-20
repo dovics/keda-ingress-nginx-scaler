@@ -1,4 +1,4 @@
-package scaler
+package utils
 
 import (
 	"path/filepath"
@@ -11,6 +11,40 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
+
+type MetricsAddrWatcher interface {
+	WatchByGlob(glob string) chan []string
+	StopWatchByGlob(glob string)
+}
+
+type MultiMetricsAddrWatcher struct {
+	watcher []MetricsAddrWatcher
+}
+
+func NewMultiMetricsAddrWatcher(watcher []MetricsAddrWatcher) *MultiMetricsAddrWatcher {
+	return &MultiMetricsAddrWatcher{
+		watcher: watcher,
+	}
+}
+
+func (m *MultiMetricsAddrWatcher) WatchByGlob(glob string) chan []string {
+	ch := make(chan []string)
+	for _, w := range m.watcher {
+		go func(w MetricsAddrWatcher) {
+			for addrs := range w.WatchByGlob(glob) {
+				ch <- addrs
+			}
+		}(w)
+	}
+
+	return ch
+}
+
+func (m *MultiMetricsAddrWatcher) StopWatchByGlob(glob string) {
+	for _, w := range m.watcher {
+		w.StopWatchByGlob(glob)
+	}
+}
 
 type MetricsAddrCache struct {
 	podInformer cache.SharedIndexInformer
@@ -51,7 +85,7 @@ func (c *MetricsAddrCache) Run(stopCh <-chan struct{}) {
 				return
 			}
 
-			c.AddPod(pod)
+			c.addPod(pod)
 		},
 		UpdateFunc: func(_, newObj interface{}) {
 			pod := newObj.(*corev1.Pod)
@@ -59,11 +93,11 @@ func (c *MetricsAddrCache) Run(stopCh <-chan struct{}) {
 				return
 			}
 
-			c.AddPod(pod)
+			c.addPod(pod)
 		},
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
-			c.RemovePod(pod)
+			c.removePod(pod)
 		},
 	})
 
@@ -71,7 +105,7 @@ func (c *MetricsAddrCache) Run(stopCh <-chan struct{}) {
 	c.podInformer.Run(stopCh)
 }
 
-func (c *MetricsAddrCache) AddPod(pod *corev1.Pod) {
+func (c *MetricsAddrCache) addPod(pod *corev1.Pod) {
 	identity, err := c.getIdentity(pod)
 	if err != nil {
 		klog.Errorf("Failed to get identity for pod %s/%s: %v", pod.Namespace, pod.Name, err)
@@ -90,7 +124,7 @@ func (c *MetricsAddrCache) AddPod(pod *corev1.Pod) {
 	c.triggerWatch(identity)
 }
 
-func (c *MetricsAddrCache) RemovePod(pod *corev1.Pod) {
+func (c *MetricsAddrCache) removePod(pod *corev1.Pod) {
 	identity, err := c.getIdentity(pod)
 	if err != nil {
 		klog.Errorf("Failed to get identity for pod %s/%s: %v", pod.Namespace, pod.Name, err)
@@ -113,7 +147,7 @@ func IsReady(pod *corev1.Pod) bool {
 	return false
 }
 
-func (c *MetricsAddrCache) GetByGlob(glob string) []string {
+func (c *MetricsAddrCache) getByGlob(glob string) []string {
 	result := []string{}
 	for key, addr := range c.cache {
 		if match, err := filepath.Match(glob, key); match && err == nil {
@@ -143,7 +177,7 @@ func (c *MetricsAddrCache) StopWatchByGlob(glob string) {
 func (c *MetricsAddrCache) triggerWatch(identity string) {
 	for glob, ch := range c.watchCh {
 		if match, err := filepath.Match(glob, identity); match && err == nil {
-			ch <- c.GetByGlob(glob)
+			ch <- c.getByGlob(glob)
 		}
 	}
 }

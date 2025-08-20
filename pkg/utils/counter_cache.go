@@ -1,4 +1,4 @@
-package scaler
+package utils
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dovics/keda-ingress-nginx-scaler/pkg/utils"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -24,7 +23,7 @@ type CounterCache struct {
 	parser expfmt.TextParser
 
 	cacheSize int
-	cache     map[string]*utils.Ring[float64]
+	cache     map[string]*Ring[float64]
 	mu        sync.RWMutex
 
 	indexFunc func(model.Metric) string
@@ -46,7 +45,7 @@ func NewCounterCache(name string, internal time.Duration, period time.Duration, 
 
 		cacheSize: cacheSize,
 
-		cache: make(map[string]*utils.Ring[float64]),
+		cache: make(map[string]*Ring[float64]),
 	}
 }
 
@@ -78,7 +77,7 @@ func (c *CounterCache) Run() {
 				r, ok := c.cache[name]
 				if !ok {
 					klog.V(4).Infof("Creating new ring buffer %s", name)
-					r = utils.NewRing[float64](int(c.period / c.internal))
+					r = NewRing[float64](int(c.period / c.internal))
 					c.cache[name] = r
 				}
 
@@ -170,7 +169,7 @@ func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (float6
 
 	before := int(beforeTime / c.internal)
 	if beforeTime%c.internal != 0 {
-		klog.Warningf("beforeTime %s is not a multiple of internal %s, %v", beforeTime, c.internal)
+		klog.Warningf("beforeTime %s is not a multiple of internal %s", beforeTime, c.internal)
 	}
 
 	c.mu.RLock()

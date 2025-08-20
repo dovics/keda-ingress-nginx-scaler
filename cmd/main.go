@@ -20,7 +20,7 @@ func main() {
 	var cacheDuration time.Duration
 
 	flag.IntVar(&port, "port", 9443, "Port number to serve webhooks. Defaults to 9443")
-	flag.StringVar(&labelSelector, "label-selector", "", "Label selector to filter events. Defaults to empty string")
+	// flag.StringVar(&labelSelector, "label-selector", "", "Label selector to filter events. Defaults to empty string")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file. Defaults to in-cluster config")
 	flag.DurationVar(&interval, "interval", 10*time.Second, "Interval to fetch metrics. Defaults to 10 seconds")
 	flag.DurationVar(&cacheDuration, "cache-duration", 5*time.Minute, "Duration to cache metrics. Defaults to 5 minutes")

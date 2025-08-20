@@ -13,6 +13,7 @@ import (
 	"k8s.io/klog/v2"
 
 	pb "github.com/dovics/keda-ingress-nginx-scaler/pkg/api"
+	"github.com/dovics/keda-ingress-nginx-scaler/pkg/utils"
 	"github.com/prometheus/common/model"
 )
 
@@ -93,30 +94,30 @@ const (
 
 type IngressNginxScaler struct {
 	clientset kubernetes.Interface
-	addrCache *MetricsAddrCache
+	watcher   utils.MetricsAddrWatcher
 
 	cacheDuration time.Duration
 	interval      time.Duration
-	metricsCache  map[string]*CounterCache
+	metricsCache  map[string]*utils.CounterCache
 }
 
-func NewIngressNginxScaler(clientset kubernetes.Interface, cache *MetricsAddrCache, interval time.Duration, cacheDuration time.Duration) *IngressNginxScaler {
+func NewIngressNginxScaler(clientset kubernetes.Interface, watcher utils.MetricsAddrWatcher, interval time.Duration, cacheDuration time.Duration) *IngressNginxScaler {
 	return &IngressNginxScaler{
 		clientset:     clientset,
-		addrCache:     cache,
+		watcher:       watcher,
 		interval:      interval,
 		cacheDuration: cacheDuration,
-		metricsCache:  make(map[string]*CounterCache),
+		metricsCache:  make(map[string]*utils.CounterCache),
 	}
 }
 
-func (s *IngressNginxScaler) getMetricsCache(globString string) *CounterCache {
+func (s *IngressNginxScaler) getMetricsCache(globString string) *utils.CounterCache {
 	if cache, ok := s.metricsCache[globString]; ok {
 		return cache
 	}
 
-	watchCh := s.addrCache.WatchByGlob(globString)
-	cache := NewCounterCache(MetricsName, s.interval, s.cacheDuration, watchCh)
+	watchCh := s.watcher.WatchByGlob(globString)
+	cache := utils.NewCounterCache(MetricsName, s.interval, s.cacheDuration, watchCh)
 	cache.SetIndexFunc(func(labels model.Metric) string {
 		return string(labels["ingress"])
 	})
