@@ -168,9 +168,9 @@ func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (float6
 		return 0, fmt.Errorf("beforeTime %s is greater than period %s", beforeTime, c.period)
 	}
 
-	before := beforeTime / c.internal
-	if before%c.internal != 0 {
-		klog.Warningf("beforeTime %s is not a multiple of internal %s", beforeTime, c.internal)
+	before := int(beforeTime / c.internal)
+	if beforeTime%c.internal != 0 {
+		klog.Warningf("beforeTime %s is not a multiple of internal %s, %v", beforeTime, c.internal)
 	}
 
 	c.mu.RLock()
@@ -181,12 +181,16 @@ func (c *CounterCache) GetBefore(index string, beforeTime time.Duration) (float6
 		return 0, fmt.Errorf("index %s not found", index)
 	}
 
-	return cache.GetBefore(int(before)), nil
+	if cache.Count() <= before {
+		return 0, fmt.Errorf("beforeTime %s is greater than cache size %d", beforeTime, cache.Count())
+	}
+
+	return cache.GetBefore(before), nil
 }
 
 func (c *CounterCache) IsActive(index string, beforeTime time.Duration) bool {
 	before := beforeTime / c.internal
-	if before%c.internal != 0 {
+	if beforeTime%c.internal != 0 {
 		klog.Warningf("beforeTime %s is not a multiple of internal %s", beforeTime, c.internal)
 	}
 

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"
+	"flag"
+	"time"
 
-	"github.com/spf13/pflag"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -16,20 +16,28 @@ func main() {
 	var port int
 	var labelSelector string
 	var kubeconfig string
-	pflag.IntVar(&port, "port", 9443, "Port number to serve webhooks. Defaults to 9443")
-	pflag.StringVar(&labelSelector, "label-selector", "", "Label selector to filter events. Defaults to empty string")
-	pflag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file. Defaults to in-cluster config")
+	var interval time.Duration
+	var cacheDuration time.Duration
 
-	pflag.Parse()
+	flag.IntVar(&port, "port", 9443, "Port number to serve webhooks. Defaults to 9443")
+	flag.StringVar(&labelSelector, "label-selector", "", "Label selector to filter events. Defaults to empty string")
+	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file. Defaults to in-cluster config")
+	flag.DurationVar(&interval, "interval", 10*time.Second, "Interval to fetch metrics. Defaults to 10 seconds")
+	flag.DurationVar(&cacheDuration, "cache-duration", 5*time.Minute, "Duration to cache metrics. Defaults to 5 minutes")
+
+	// Initialize klog flags
+	klog.InitFlags(nil)
+
+	flag.Parse()
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig) // Fixed here
 	if err != nil {
-		log.Fatalf("Failed to build config from kubeconfig: %v", err)
+		klog.Fatalf("Failed to build config from kubeconfig: %v", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Failed to create clientset: %v", err)
+		klog.Fatalf("Failed to create clientset: %v", err)
 	}
 
 	server := server.NewServer(port)
@@ -40,9 +48,9 @@ func main() {
 	defer close(stopCh)
 	go cache.Run(stopCh)
 
-	scaler := scaler.NewIngressNginxScaler(clientset, cache)
+	scaler := scaler.NewIngressNginxScaler(clientset, cache, interval, cacheDuration)
 	klog.V(2).Info("Starting scaler server")
 	if err := server.Start(scaler); err != nil {
-		log.Fatal(err)
+		klog.Fatal(err)
 	}
 }

@@ -24,11 +24,16 @@ func (r *Ring[T]) Enqueue(item T) {
 func (r *Ring[T]) Count() int {
 	return r.count
 }
+
 func (r *Ring[T]) Get(index int) T {
 	return r.data[index]
 }
 
 func (r *Ring[T]) GetLatest() T {
+	if r.index == 0 {
+		return r.data[len(r.data)-1]
+	}
+
 	return r.data[r.index-1]
 }
 

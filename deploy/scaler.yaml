@@ -84,6 +84,7 @@ spec:
         args:
         - --port=9443
         - --label-selector=app.kubernetes.io/name=ingress-nginx
+        - --v=6
       serviceAccountName: ingress-nginx-scaler
 ---
 apiVersion: v1

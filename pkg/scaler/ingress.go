@@ -10,6 +10,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const DefaultHealthzPort = 10254
+
 func GetIngressIdentity(pod *corev1.Pod) (string, error) {
 	if !IsIngressController(pod) {
 		return "", errors.New("pod is not an ingress controller")
@@ -49,11 +51,9 @@ func GetIngressClass(pod *corev1.Pod) string {
 		}
 	}
 
-	klog.V(4).Infof("Ingress controller pod %s does not have an ingress-class argument, use empty as default", pod.Name)
-	return ""
+	klog.V(4).Infof("Ingress controller pod %s does not have an ingress-class argument, use %s as default", pod.Name, EmptyIngressClass)
+	return EmptyIngressClass
 }
-
-const DefaultHealthzPort = 10254
 
 func GetHealthzPortForIngressController(pod *corev1.Pod) int {
 	for _, container := range pod.Spec.Containers {
